@@ -1,0 +1,129 @@
+---
+title: "Activity prediction project"
+output: html_document
+---
+Practical machine learning course.
+
+
+## Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset). 
+
+The goal of the project is to predict the manner in which participants did the exercise. This is the "classe" variable in the training set.
+
+During prediction I reduced number of predictors. Than I tried two meodels. Classification tree with poor results and Random forrest with excelent coeffitients. Prediction made on testing set and result submission confirmed very high accuracy of model and all 20 cases were predicted correctly. 
+
+## Data loading
+
+Downloading data to data.frames. Substitution of strings 'NA','#DIV/0!' to NA values.
+
+```{r read_data, cache=TRUE}
+url.train <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url.test <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+ds.train <- read.csv(url(url.train), na.strings=c("NA","#DIV/0!",""))
+ds.test <- read.csv(url(url.test), na.strings=c("NA","#DIV/0!",""))
+```
+
+
+## Data processing and feature selection
+
+Library loading
+```{r library_loading, message=FALSE }
+library(caret)
+library(rattle)
+library(rpart)
+library(randomForest)
+```
+
+I decieded to get rid of the first six variables, because I found them more like matedata.
+X (case identifier), user_name (individual person shoudn't be predictor).
+```{r variable_cut}
+ds.train <- ds.train[,c(-1:-7)]
+```
+
+I explored that there were sparsely filled variables.
+I got rid of those, which had more than 90% NA values.
+```{r na_cut}
+NA.90.colnames <- sapply(ds.train, function(x) sum(is.na(x)) / length(x) >= .9 )
+ds.train <- ds.train[,!NA.90.colnames]
+```
+
+Finally I checked up for NZV variables. Found nothing.
+```{r nzv_cut}
+nzv <- nearZeroVar(ds.train,saveMetrics=TRUE)
+nzv.colnames <- colnames(ds.train) %in% rownames(nzv[nzv$nzv,]) 
+ds.train <- ds.train[, !nzv.colnames,]
+```
+
+## Data splitting
+
+Training data set is splitted into two data sets, 70% for model traning and 30% for result testing.
+```{r data_splitting}
+set.seed(1234)
+
+inTraining <- createDataPartition(y=ds.train$classe,p=.7,list=F) 
+
+ds.train.train <- ds.train[inTraining,]
+ds.train.test <- ds.train[-inTraining,]
+
+dim(ds.train.train)
+dim(ds.train.test)
+```
+
+## Model selection
+
+### Classification Tree
+First I tried classification tree.
+```{r model_dt, cache=TRUE}
+mod.dt <- train(classe ~ .,method="rpart",data=ds.train.train)
+print(mod.dt$finalModel)
+
+predict.dt <- predict(mod.dt$finalModel, ds.train.test, type = "class")
+cm.dt <- confusionMatrix(predict.dt, ds.train.test$classe)
+```
+
+Confusion matrix exposed poor results. Clase D wasn't predicted correctly at all.
+```{r cf_dt}
+dt.accuracy <- cm.dt$overall["Accuracy"]
+dt.kappa <- cm.dt$overall["Kappa"]
+cm.dt$table
+```
+
+Accuracy `r dt.accuracy` and Kappa `r dt.kappa` coefficients confirmed bad model selection.
+
+### Random forrest
+I tried the random forrest model.
+```{r model_rf, cache=TRUE}
+mod.rf <- randomForest(classe ~.,data=ds.train.train)
+
+predict.rf <- predict(mod.rf, ds.train.test, type = "class")
+cm.rf <- confusionMatrix(predict.rf, ds.train.test$classe)
+```
+
+Confusion matrix exposed very nice results.
+```{r cf_rf}
+rf.accuracy <- cm.rf$overall["Accuracy"]
+rf.kappa <- cm.rf$overall["Kappa"]
+cm.rf$table
+```
+
+Accuracy `r rf.accuracy` and Kappa `r rf.kappa` coefficients were promissing.
+So I chose this model and expected very precise prediction (max 1 mistake). 
+
+## Prediction
+I used RF model for prediction of classes with test set.
+```{r prediction}
+test.predict.rf <- predict(mod.rf, ds.test, type = "class")
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(test.predict.rf)
+```
+
+And I've got expected results.
