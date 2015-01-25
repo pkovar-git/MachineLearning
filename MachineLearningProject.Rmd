@@ -109,7 +109,12 @@ cm.rf$table
 ```
 
 Accuracy `r rf.accuracy` and Kappa `r rf.kappa` coefficients were promissing.
-So I chose this model and expected very precise prediction (max 1 mistake). 
+So I chose this model and expected very precise prediction (max 1 mistake).
+
+Variable importance
+```{r varImp}
+varImpPlot(mod.rf, main="Variable Importance",n.var=20)
+```
 
 ## Prediction
 I used RF model for prediction of classes with test set.
